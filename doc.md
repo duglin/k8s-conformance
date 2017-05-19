@@ -1,30 +1,21 @@
 # Kubernetes Conformance
 
-Here are the tests...
+Here are conformance statements and tests:
 
 
-## Test1
+## Pod001
 
-Test1 ...
-
-
-## Test2
-
-Test2 ...
-qewqweqwe
+Pod001 will verify that ...
+Conformant implementations MUST ....
 
 
-## Test3
+## Pod002
 
-This will ...
-line 2
+Pod002 will verify that ...
+Conformant implementations MUST ....
 
 
-## Test4
+## Pod003
 
-This will ...
-line 2
-
-After blank
 
 

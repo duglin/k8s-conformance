@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -58,12 +59,44 @@ func extractDescriptions(fileName string) Descriptions {
 func main() {
 	res := Descriptions{}
 
-	for _, fn := range os.Args[1:] {
+	var srcFn = flag.String("src", "src/funcs.go", "File to write src file")
+	var docFn = flag.String("doc", "doc.body", "File to write doc file")
+	flag.Parse()
+
+	for _, fn := range flag.Args() {
 		res = append(res, extractDescriptions(fn)[:]...)
 	}
 
 	sort.Sort(res)
-	for _, r := range res {
-		fmt.Printf("## %s\n\n%s\n\n", r.Name, r.Description)
+
+	srcFile, err := os.Create(*srcFn)
+	if err != nil {
+		fmt.Fprint(os.Stderr, err)
+		os.Exit(1)
 	}
+	defer srcFile.Close()
+
+	docFile, err := os.Create(*docFn)
+	if err != nil {
+		fmt.Fprint(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer docFile.Close()
+
+	srcFile.WriteString("package main\n\n")
+	srcFile.WriteString("import \"../utils\"\n")
+	srcFile.WriteString("import \"../tests\"\n\n")
+	srcFile.WriteString("var TestMap = map[string]func(*utils.Test){\n")
+
+	for _, r := range res {
+		fmt.Fprintf(docFile, "## %s\n\n%s\n\n", r.Name, r.Description)
+
+		str := fmt.Sprintf("\t\"%s\": tests.%s,\n", r.Name, r.Name)
+		srcFile.WriteString(str)
+	}
+	srcFile.WriteString("}\n\nvar TestNames = []string{\n")
+	for _, r := range res {
+		srcFile.WriteString("\t\"" + r.Name + "\",\n")
+	}
+	srcFile.WriteString("}\n")
 }
