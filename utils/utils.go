@@ -10,25 +10,44 @@ type Test struct {
 }
 
 func NewTest() *Test {
-	s := &Test{
+	t := &Test{
 		status: true,
 	}
-	return s
+	return t
 }
 
-func (s *Test) Fail(msg string) {
-	s.status = false
-	s.message = msg
+func (t *Test) Log(msg string) {
+	fmt.Print(msg + "\n")
 }
 
-func (s *Test) Status() bool {
-	return s.status
+func (t *Test) Logf(f string, args ...string) {
+	fmt.Printf(f+"\n", args)
 }
 
-func (s *Test) Message() string {
-	return s.message
+func (t *Test) Fail(msg string) {
+	t.status = false
+	// t.message = msg
+	panic(msg + "\n")
 }
 
-func Helper() {
-	fmt.Printf("hi from helper\n")
+func (t *Test) Failf(f string, args ...string) {
+	t.status = false
+	// t.message = fmt.Sprintf(f, args)
+	panic(fmt.Sprintf(f+"\n", args))
+}
+
+func (t *Test) Status() bool {
+	return t.status
+}
+
+func (t *Test) SetStatus(s bool) {
+	t.status = s
+}
+
+func (t *Test) Message() string {
+	return t.message
+}
+
+func (t *Test) SetMessage(str string) {
+	t.message = str
 }

@@ -12,7 +12,6 @@ import (
 // MUST eventually end up in the `Running` state, and then be able to be
 // deleted. Deleting a Pod MUST remove it from the platform
 func Pod001(t *Test) {
-	Helper()
 	fmt.Printf("hi from pod001\n")
 }
 
