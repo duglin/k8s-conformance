@@ -13,6 +13,8 @@ import (
 
 // Description ....
 type Description struct {
+	FileName    string
+	Line        int
 	Name        string
 	Description string
 }
@@ -37,8 +39,14 @@ func extractDescriptions(fileName string) Descriptions {
 		if fn, ok := decl.(*ast.FuncDecl); ok {
 			if fn.Name != nil {
 				add := Description{
-					Name: fn.Name.Name,
+					FileName: fileName,
+					Name:     fn.Name.Name,
 				}
+
+				if fn.Doc != nil && fn.Doc.List != nil {
+					add.Line = fset.Position(fn.Doc.List[0].Slash).Line
+				}
+
 				if fn.Doc.Text != nil {
 					add.Description = fn.Doc.Text()
 					/*
@@ -89,7 +97,8 @@ func main() {
 	srcFile.WriteString("var TestMap = map[string]func(*utils.Test){\n")
 
 	for _, r := range res {
-		fmt.Fprintf(docFile, "## %s\n\n%s\n\n", r.Name, r.Description)
+		fmt.Fprintf(docFile, "## [%s](%s#L%d)\n\n%s\n\n", r.Name, r.FileName,
+			r.Line, r.Description)
 
 		str := fmt.Sprintf("\t\"%s\": tests.%s,\n", r.Name, r.Name)
 		srcFile.WriteString(str)
