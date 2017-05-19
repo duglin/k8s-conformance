@@ -60,7 +60,7 @@ func main() {
 	res := Descriptions{}
 
 	var srcFn = flag.String("src", "src/funcs.go", "File to write src file")
-	var docFn = flag.String("doc", "doc.body", "File to write doc file")
+	var docFn = flag.String("doc", "tests.md", "File to write doc file")
 	flag.Parse()
 
 	for _, fn := range flag.Args() {
