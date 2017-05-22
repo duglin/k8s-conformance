@@ -6,7 +6,7 @@ behaves properly for a core set of features. This will help ensure that
 users can port their applications between Kubernetes deployments and get
 consistent results.
 
-### TOC
+### Table of Contents
 1. [Conformance Tests](#conformance-tests)
 1. [Running the Tests](#running-the-tests)
 1. [Structure of the Tests](#structure-of-the-tests)
@@ -86,6 +86,31 @@ TODO: Add stuff on:
 * suggesting new tests
 * how to add new tests (PRs)
 * how are tests accepted - what's the approval process
+
+## Building the Tools
+
+In order to build the `kubecon` tool you'll need to have `make` and the golang
+compiler installed.
+
+* Build `bin/kubecon` for local platform:
+```
+$ make
+```
+
+* Build `bin/kubecon-OS-ARCH` for all known operating systems/architetures:
+```
+$ make cross
+```
+
+* Clean build environment (erase everything except the href checker tool):
+```
+$ make clean
+```
+
+* Erase all files - including the href checker tool:
+```
+$ make purge
+```
 
 ## Reporting Errors in the Tests
 
