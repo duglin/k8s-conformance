@@ -11,6 +11,7 @@ consistent results.
 1. [Running the Tests](#running-the-tests)
 1. [Structure of the Tests](#structure-of-the-tests)
 1. [Contributing](#contributing)
+1. [Building the Tool](#building-the-tool)
 1. [Reporting Errors in the Tests](#reporting-errors-in-the-tests)
 1. [Reporting Errors in a Kubernetes Deployment](#reporting-errors-in-a-kubernetes-deployment)
 
@@ -87,12 +88,12 @@ TODO: Add stuff on:
 * how to add new tests (PRs)
 * how are tests accepted - what's the approval process
 
-## Building the Tools
+## Building the Tool
 
 In order to build the `kubecon` tool you'll need to have `make` and the golang
 compiler installed.
 
-* Build `bin/kubecon` for local platform:
+* Build `bin/kubecon` for your local platform:
 ```
 $ make
 ```
