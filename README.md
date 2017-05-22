@@ -1,12 +1,18 @@
 # Kubernetes Conformance Test Suite
 
-## Abstract
-
 This repository contains the Kubernetes conformance test suite.
 The purpose of these tests are to ensure that a Kubernetes deployment
 behaves properly for a core set of features. This will help ensure that
 users can port their applications between Kubernetes deployments and get
 consistent results.
+
+### TOC
+1. [Conformance Tests](#conformance-tests)
+1. [Running the Tests](#running-the-tests)
+1. [Structure of the Tests](#structure-of-the-tests)
+1. [Contributing](#contributing)
+1. [Reporting Errors in the Tests](#reporting-errors-in-the-tests)
+1. [Reporting Errors in a Kubernetes Deployment](#reporting-errors-in-a-kubernetes-deployment)
 
 ## Conformance Tests
 
@@ -25,8 +31,9 @@ This program will assume the following is true:
   have your Kubernetes config files and environment variabes setup
   properly so that `kubectl` will work without any additional setup.
 
-To download `kubecon` go to the [releases](releases) page and download
-the appropriate version.
+To download `kubecon` go to the
+[releases](https://github.com/duglin/k8s-conformance/releases) page
+and download the appropriate version.
 
 To run `kubecon` simply run it from your command line:
 ```
@@ -80,11 +87,11 @@ TODO: Add stuff on:
 * how to add new tests (PRs)
 * how are tests accepted - what's the approval process
 
+## Reporting Errors in the Tests
+
+Open an [issue](https://github.com/duglin/k8s-conformance/issues).
+
 ## Reporting Errors in a Kubernetes Deployment
 
 Talk to the organziation hosting or providing the Kubernetes deployment.
-
-## Reporting Errors in the Tests
-
-Open an [issue](issues).
 

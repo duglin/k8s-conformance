@@ -113,7 +113,7 @@ func main() {
 	docFile.WriteString("## Table of Contents\n\n")
 
 	for i, t := range suite.TOC {
-		docFile.WriteString(fmt.Sprintf("%d - [%s](#%s)\n", 1+i, t, t))
+		docFile.WriteString(fmt.Sprintf("%d - [%s](#%s)\n", 1+i, t, strings.ToLower(t)))
 	}
 
 	docFile.WriteString("\n")

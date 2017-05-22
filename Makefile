@@ -1,6 +1,10 @@
-all: build-tools tests.md tool
+all: build-tools tests.md tool verify
 
 BUILD_OPTS=-tags netgo -installsuffix netgo src/kubecon.go src/funcs.go
+DO_UPDATE=
+ifeq ("$(wildcard bin/verify*)","")
+DO_UPDATE=update
+endif
 
 build-tools: bin/extract
 
@@ -20,7 +24,17 @@ bin/kubecon: src/kubecon.go src/funcs.go
 cross:
 	BUILD_OPTS="${BUILD_OPTS}" utils/cross.sh
 
+verify: $(DO_UPDATE)
+	bin/verify-links.sh *.md
+
+update:
+	curl -s https://raw.githubusercontent.com/duglin/vlinker/master/bin/verify-links.sh > bin/verify-links.sh
+	chmod +x bin/verify-links.sh
+
 clean:
 	rm -f tests.md
 	rm -f src/funcs.go
-	rm -rf bin
+	rm -f bin/kubecon* bin/extract
+
+purge: clean
+	rm  -rf bin
