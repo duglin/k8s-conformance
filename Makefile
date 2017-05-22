@@ -1,12 +1,11 @@
-all: build-tools tests.md tool verify
+# Targets of interest:
+#   all - build docs and 'kubecon' tool for current platform/OS, verify hrefs
+#   cross - builds docs, 'kubecon' tool for all platforms/OS
 
+EXE=bin/kubecon
 BUILD_OPTS=-tags netgo -installsuffix netgo src/kubecon.go src/funcs.go
-DO_UPDATE=
-ifeq ("$(wildcard utils/verify*)","")
-DO_UPDATE=update
-endif
 
-build-tools: bin/extract
+all: $(EXE) verify
 
 bin/extract: src/extract.go
 	@echo -e \\nBuilding extract tool...
@@ -16,27 +15,28 @@ tests.md src/funcs.go : tests/*.go bin/extract
 	@echo -e \\nBuilding the conformance test doc...
 	bin/extract tests/*.go
 
-tool: bin/kubecon
-
-bin/kubecon: src/kubecon.go src/funcs.go
+$(EXE): src/kubecon.go src/funcs.go
 	go build -o $@ ${BUILD_OPTS}
 
-cross:
-	BUILD_OPTS="${BUILD_OPTS}" utils/cross.sh
+cross: .cross
+.cross: $(EXE)
+	@echo -e \\nBuilding \'kubecon\' for all platforms...
+	@BUILD_OPTS="${BUILD_OPTS}" BINARY="${EXE}" utils/cross.sh
+	@echo > .cross
 
-verify: $(DO_UPDATE)
+verify: .verify
+.verify: tests.md utils/verify-links.sh
 	@echo -e \\nRunning the href checking tool...
 	utils/verify-links.sh *.md
+	@echo > .verify
 
-update:
+utils/verify-links.sh:
 	@echo -e \\nDownloading the href checking tool...
-	curl -s https://raw.githubusercontent.com/duglin/vlinker/master/bin/verify-links.sh > utils/verify-links.sh
-	chmod +x utils/verify-links.sh
+	curl -s https://raw.githubusercontent.com/duglin/vlinker/master/bin/verify-links.sh > $@
+	chmod +x $@
 
 clean:
-	rm -f tests.md
-	rm -f src/funcs.go
-	rm -rf bin
+	rm -rf tests.md src/funcs.go .cross .verify bin
 
 purge: clean
-	rm  -f utils/verify-links.sh
+	rm -f utils/verify-links.sh

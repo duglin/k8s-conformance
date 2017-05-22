@@ -1,3 +1,5 @@
+.cross
+.verify
 bin
 src/funcs.go
 utils/verify-links.sh
