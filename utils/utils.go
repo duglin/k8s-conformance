@@ -85,8 +85,13 @@ func ObjValue(obj interface{}, path string) (string, error) {
 	var ok bool
 	for pos := 0; ; pos = pos + 1 {
 		if pos == len(words) {
-			str, _ := json.Marshal(obj)
-			return string(str), nil
+			switch obj.(type) {
+			case string, int, float64, bool:
+				return fmt.Sprintf("%v", obj), nil
+			default:
+				res, _ := json.Marshal(obj)
+				return string(res), nil
+			}
 		}
 		word := words[pos]
 

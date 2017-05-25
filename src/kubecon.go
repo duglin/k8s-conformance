@@ -84,9 +84,9 @@ func runTest(name string, fn func(*utils.Test)) bool {
 	outFile.Close()
 
 	if t.Status() {
-		fmt.Printf("%s: PASS\n", name)
+		fmt.Printf("PASS: %s\n", name)
 	} else {
-		fmt.Printf("%s: FAIL\n", name)
+		fmt.Printf("FAIL: %s\n", name)
 	}
 
 	if !t.Status() || verbose {

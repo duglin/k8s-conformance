@@ -37,20 +37,14 @@ func Pod001(t *Test) {
 	out, code = Kubectl("get", "pod/pod001", "-o", "yaml")
 	t.Assertf(code == 0, "Getting pod failed(%d): %s", code, out)
 
-	v, err := YamlValue(out, "metadata.name")
-	t.Logf("metadata.name: %v - %s", v, err)
+	n, err := YamlValue(out, "metadata.name")
+	fmt.Printf("name: %s\n", n)
+	t.Assertf(err == nil, "Error parsing yaml: %s\n%s", err, out)
+	t.Assertf(n == "pod001", "Wrong pod name(%q), expected %q", n, "pod001")
 
-	m, err := YamlValue(out, "metadata")
-	t.Logf("metadata: %v - %s", m, err)
-
-	cs, err := YamlValue(out, "spec.containers")
-	t.Logf("spec.containers: %v - %s", cs, err)
-
-	c1, err := YamlValue(out, "spec.containers[0]")
-	t.Logf("spec.containers[0]: %v - %s", c1, err)
-
-	c2, err := YamlValue(out, "spec.containers[0].name")
-	t.Logf("spec.containers[0].name: %v - %s", c2, err)
+	i, err := YamlValue(out, "spec.containers[0].image")
+	t.Assertf(err == nil, "Error parsing yaml: %s\n%s", err, out)
+	t.Assertf(i == "nginx", "Wrong image name(%q), expected %q", i, "nginx")
 
 	out, code = Kubectl("delete", "pod/pod001")
 	t.Assertf(code == 0, "Deleting pod failed(%d): %s", code, out)
@@ -59,8 +53,6 @@ func Pod001(t *Test) {
 // Pod002 will verify that ...
 // Conformant implementations MUST ....
 func Pod002(t *Test) {
-	fmt.Printf("hi from pod002\n")
-	t.Fail("oh no")
 }
 
 func Pod003(t *Test) {
