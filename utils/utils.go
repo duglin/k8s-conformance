@@ -12,6 +12,10 @@ import (
 	"github.com/ghodss/yaml"
 )
 
+func RunCmdSh(cmd string) (string, int) {
+	return RunCmd("sh", "-c", cmd)
+}
+
 func RunCmd(args ...string) (string, int) {
 	// TODO: add timeouts
 	cmd := exec.Command(args[0], args[1:]...)
@@ -21,6 +25,10 @@ func RunCmd(args ...string) (string, int) {
 	}
 
 	return string(output), 0
+}
+
+func KubectlSh(cmd string) (string, int) {
+	return RunCmdSh("kubectl " + cmd)
 }
 
 func Kubectl(args ...string) (string, int) {
@@ -36,34 +44,52 @@ func CreateFile(fn string, content string) {
 	}
 }
 
+const NotFoundValue = "****____NOT_FOUND____****"
+
 // JsonValue will walk a json object (as a string) for a particular value.
 // path is of form:
 //   prop
 //   prop.prop
 //   prop[int].prop
-func JsonValue(jsonStr string, path string) (string, error) {
+func JsonValue(jsonStr string, path string) string {
 	var obj interface{}
 	err := json.Unmarshal([]byte(jsonStr), &obj)
 	if err != nil {
 		panic(fmt.Sprintf("Error parsing json(%s):\n%s", err, jsonStr))
 	}
-	return ObjValue(obj, path)
+
+	foundIt, val, err := ObjValue(obj, path)
+	if err != nil {
+		panic(fmt.Sprintf("%v", err))
+	}
+
+	if foundIt {
+		return val
+	}
+
+	return NotFoundValue
 }
 
-func YamlValue(yamlStr string, path string) (string, error) {
+func YamlValue(yamlStr string, path string) string {
 	var obj interface{}
 	err := yaml.Unmarshal([]byte(yamlStr), &obj)
 	if err != nil {
 		panic(fmt.Sprintf("Error parsing yaml(%s):\n%s", err, yamlStr))
 	}
-	return ObjValue(obj, path)
+
+	foundIt, val, err := ObjValue(obj, path)
+	if err != nil {
+		panic(fmt.Sprintf("%v", err))
+	}
+
+	if foundIt {
+		return val
+	}
+
+	return NotFoundValue
 }
 
-func IsNotFound(err error) bool {
-	return err != nil && strings.HasPrefix(err.Error(), "Can't find property:")
-}
-
-func ObjValue(obj interface{}, path string) (string, error) {
+func ObjValue(obj interface{}, path string) (bool, string, error) {
 	words := []string{}
 	path = strings.TrimSpace(path)
 	prop := ""
@@ -90,13 +116,13 @@ func ObjValue(obj interface{}, path string) (string, error) {
 		if pos == len(words) {
 			switch obj.(type) {
 			case string, int, float64, bool:
-				return fmt.Sprintf("%v", obj), nil
+				return true, fmt.Sprintf("%v", obj), nil
 			default:
 				res, err := json.Marshal(obj)
 				if err != nil {
-					return "", fmt.Errorf("Error marshalling %q", obj)
+					return false, "", fmt.Errorf("Error marshalling %q", obj)
 				}
-				return string(res), nil
+				return true, string(res), nil
 			}
 		}
 		word := words[pos]
@@ -104,32 +130,33 @@ func ObjValue(obj interface{}, path string) (string, error) {
 		if word == "." {
 			obj, ok = obj.(map[string]interface{})
 			if !ok {
-				return "", fmt.Errorf("Can't convert %q to a map", obj)
+				return false, "", fmt.Errorf("Can't convert %q to a map", obj)
 			}
 		} else if word == "[" {
 			pos = pos + 1
 			if pos == len(words) {
-				return "", fmt.Errorf("Missing index")
+				return false, "", fmt.Errorf("Missing index")
 			}
 			index, err := strconv.Atoi(words[pos])
 			if err != nil {
-				return "", fmt.Errorf("Can't convert %q to an int: %s",
+				return false, "", fmt.Errorf("Can't convert %q to an int: %s",
 					words[pos], err)
 			}
 			obj, ok = obj.([]interface{})
 			if !ok {
-				return "", fmt.Errorf("Can't convert %q to an array", obj)
+				return false, "", fmt.Errorf("Can't convert %q to an array",
+					obj)
 			}
 
 			if index < 0 || index >= len(obj.([]interface{})) {
-				return "", fmt.Errorf("Index %q is out of range", index)
+				return false, "", nil
 			}
 
 			obj = obj.([]interface{})[index]
 		} else {
 			obj, ok = obj.(map[string]interface{})[word]
 			if !ok {
-				return "", fmt.Errorf("Can't find property: %s", word)
+				return false, "", nil
 			}
 		}
 	}
@@ -147,6 +174,29 @@ func Wait(timeout time.Duration, fn func() (bool, error)) (bool, error) {
 		time.Sleep(1 * time.Second)
 	}
 	return false, err
+}
+
+func WaitPod(timeout time.Duration, podName string, podNS string) error {
+	b, err := Wait(20*time.Second, func() (bool, error) {
+		out, code := Kubectl("get", "pod/"+podName, "-o", "json",
+			"--namespace", podNS)
+		if code != 0 {
+			return false, fmt.Errorf("Error getting pod: %s", out)
+		}
+		s := JsonValue(out, "status.phase")
+		return s == "Running", nil
+	})
+	if b == true {
+		return nil
+	}
+	if err == nil {
+		err = fmt.Errorf("Timed-out waiting for container %q to start",
+			podName)
+	} else {
+		err = fmt.Errorf("Timed-out waiting for container %q to start: %s",
+			podName, err)
+	}
+	return err
 }
 
 var Verbose bool

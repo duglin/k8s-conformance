@@ -65,20 +65,22 @@ func (t *Test) SetMessage(str string) {
 	t.message = str
 }
 
-func (t *Test) Assert(b bool, msg string) {
+func (t *Test) Assert(b bool, msg interface{}) {
 	if b {
 		return
 	}
+
+	str := fmt.Sprintf("%v", msg)
 
 	if _, file, line, ok := runtime.Caller(1); ok {
 		if i := strings.LastIndexAny(file, "/\\"); i >= 0 {
 			file = file[i+1:]
 		}
 
-		msg = file + ":" + strconv.Itoa(line) + ": " + msg
+		str = file + ":" + strconv.Itoa(line) + ": " + str
 	}
 
-	t.fail(msg)
+	t.fail(str)
 }
 
 func (t *Test) Assertf(b bool, f string, args ...interface{}) {

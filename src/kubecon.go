@@ -19,7 +19,7 @@ func runTest(name string, fn func(*Test)) bool {
 
 	cwd, err := os.Getwd()
 	if err != nil {
-		ErrStop("Can't get CWD: %s\n", err)
+		ErrStop("Can't get CWD: %s", err)
 	}
 	defer func() {
 		os.Chdir(cwd) // Ignore err?
@@ -27,7 +27,7 @@ func runTest(name string, fn func(*Test)) bool {
 
 	dir, err := ioutil.TempDir("", "kubecon")
 	if err != nil {
-		ErrStop("Can't create temp dir: %s\n", err)
+		ErrStop("Can't create temp dir: %s", err)
 	}
 	defer func() {
 		os.RemoveAll(dir)
@@ -35,7 +35,7 @@ func runTest(name string, fn func(*Test)) bool {
 
 	err = os.Chdir(dir)
 	if err != nil {
-		ErrStop("Can't cd to temp dir(%q): %s\n", dir, err)
+		ErrStop("Can't cd to temp dir(%q): %s", dir, err)
 	}
 
 	// Save old stdout/stderr so we can re-attach them when we're done
@@ -44,7 +44,7 @@ func runTest(name string, fn func(*Test)) bool {
 
 	r, w, e := os.Pipe()
 	if e != nil {
-		ErrStop("Can't create a pipe: %s\n", e)
+		ErrStop("Can't create a pipe: %s", e)
 	}
 
 	outFile, err := os.Create("stdout") // Should be in temp dir, auto-removed
@@ -110,25 +110,25 @@ func runTest(name string, fn func(*Test)) bool {
 }
 
 func ErrStop(f string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, f, args...)
+	fmt.Fprintf(os.Stderr, f+"\n", args...)
 	os.Exit(1)
 }
 
 func SetupEnv() {
 	Logf("Retrieving current context")
 	if out, code := Kubectl("config", "current-context"); code != 0 {
-		ErrStop("Can't get current context: %s\n", out)
+		ErrStop("Can't get current context: %s", out)
 	}
 
 	Logf("Creating new namespace: %s", tests.TestNS)
 	if out, code := Kubectl("create", "namespace", tests.TestNS); code != 0 {
-		ErrStop("Can't create the %q namespace: %s\n", tests.TestNS, out)
+		ErrStop("Can't create the %q namespace: %s", tests.TestNS, out)
 	}
 
 	Logf("Set context %q namespace to %q", tests.TestCtxt, tests.TestNS)
 	if out, code := Kubectl("config", "set-context", tests.TestCtxt,
 		"--namespace", tests.TestNS); code != 0 {
-		ErrStop("Can't get namespace: %s\n", out)
+		ErrStop("Can't get namespace: %s", out)
 	}
 }
 
@@ -151,11 +151,16 @@ func DeleteEnv() {
 	CleanEnv()
 
 	Logf("Deleting namespace: %s", tests.TestNS)
-	Kubectl("delete", "namespace", "--force=true", tests.TestNS)
+	Kubectl("delete", "namespace", "--force=true", "a"+tests.TestNS)
 
 	b, err := Wait(60*time.Second, func() (bool, error) {
 		_, code := Kubectl("get", "namespace", tests.TestNS)
-		return code != 0, fmt.Errorf("NS still there")
+		if code != 0 {
+			return true, nil
+		}
+		out, code := Kubectl("delete", "namespace", "--force=true",
+			tests.TestNS)
+		return false, fmt.Errorf("it just won't go away!\n%s", out)
 	})
 
 	if !b {
@@ -191,14 +196,14 @@ Specify 'TEST', a regular expression, to run seletive tests.
 	for _, pattern := range flag.Args() {
 		re, err := regexp.Compile("(?i)" + pattern)
 		if err != nil {
-			ErrStop("Bad test pattern %q: %s\n", pattern, err)
+			ErrStop("Bad test pattern %q: %s", pattern, err)
 		}
 		testPatterns = append(testPatterns, re)
 	}
 
 	flag.Args()
 
-	SetupEnv()
+	first := true
 
 	for _, name := range TestNames {
 		if len(testPatterns) != 0 {
@@ -213,17 +218,30 @@ Specify 'TEST', a regular expression, to run seletive tests.
 			}
 		}
 
-		if fn, ok := TestMap[name]; !ok {
+		fn, ok := TestMap[name]
+		if !ok {
 			fmt.Fprintf(os.Stderr, "Missing func for name %q\n", name)
-		} else if runTest(name, fn) {
+			continue
+		}
+
+		// Don't setup our env until we know for sure we have a test to run
+		if first {
+			SetupEnv()
+		}
+
+		if runTest(name, fn) {
 			success = success + 1
 		}
 		total = total + 1
 
 		CleanEnv()
+		first = false
 	}
 
-	DeleteEnv()
+	// Only delete env if we actually set it up
+	if !first {
+		DeleteEnv()
+	}
 
 	if len(testPatterns) > 0 && total == 0 {
 		ErrStop("Test name patterns didn't find any matches")
