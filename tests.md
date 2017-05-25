@@ -14,13 +14,13 @@ MUST eventually end up in the `Running` state, and then be able to be
 deleted. Deleting a Pod MUST remove it from the platform
 
 
-### [Pod002](tests/pod.go#L66)
+### [Pod002](tests/pod.go#L58)
 
 Pod002 will verify that ...
 Conformant implementations MUST ....
 
 
-### [Pod003](tests/pod.go#L71)
+### [Pod003](tests/pod.go#L63)
 
 
 

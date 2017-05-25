@@ -2,6 +2,7 @@ package utils
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os/exec"
@@ -176,25 +177,32 @@ func Wait(timeout time.Duration, fn func() (bool, error)) (bool, error) {
 	return false, err
 }
 
-func WaitPod(timeout time.Duration, podName string, podNS string) error {
+func WaitPod(timeout time.Duration, name, ns, state string) error {
 	b, err := Wait(20*time.Second, func() (bool, error) {
-		out, code := Kubectl("get", "pod/"+podName, "-o", "json",
-			"--namespace", podNS)
+		out, code := Kubectl("get", "pod/"+name, "-o", "json",
+			"--namespace", ns)
+		if state == "Deleted" {
+			err := errors.New("Pod still there")
+			if code == 0 {
+				return false, err
+			}
+			return strings.Contains(out, "not found"), err
+		}
 		if code != 0 {
 			return false, fmt.Errorf("Error getting pod: %s", out)
 		}
 		s := JsonValue(out, "status.phase")
-		return s == "Running", nil
+		return s == state, nil
 	})
 	if b == true {
 		return nil
 	}
 	if err == nil {
-		err = fmt.Errorf("Timed-out waiting for container %q to start",
-			podName)
+		err = fmt.Errorf("Timed-out waiting for container %q",
+			name)
 	} else {
-		err = fmt.Errorf("Timed-out waiting for container %q to start: %s",
-			podName, err)
+		err = fmt.Errorf("Timed-out waiting for container %q: %s",
+			name, err)
 	}
 	return err
 }

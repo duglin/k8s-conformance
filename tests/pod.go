@@ -1,8 +1,8 @@
 package tests
 
 import (
-	"errors"
-	"strings"
+	// "errors"
+	// "strings"
 	"time"
 
 	. "../utils"
@@ -39,7 +39,7 @@ func Pod001(t *Test) {
 	out, code = KubectlSh("get pod/pod001 -o yaml --namespace " + TestNS)
 	t.Assertf(code == 0, "Getting pod failed(%d): %s", code, out)
 
-	err := WaitPod(20*time.Second, "pod001", TestNS)
+	err := WaitPod(20*time.Second, "pod001", TestNS, "Running")
 	t.Assert(err == nil, err)
 
 	n := YamlValue(out, "metadata.name")
@@ -51,16 +51,8 @@ func Pod001(t *Test) {
 	out, code = KubectlSh("delete pod/pod001 --namespace " + TestNS)
 	t.Assertf(code == 0, "Deleting pod failed(%d): %s", code, out)
 
-	b, err := Wait(20*time.Second, func() (bool, error) {
-		out, code := Kubectl("get", "pod/pod001", "-o", "json",
-			"--namespace", TestNS)
-		err := errors.New("Pod still there")
-		if code == 0 {
-			return false, err
-		}
-		return strings.Contains(out, "not found"), err
-	})
-	t.Assertf(b, "Container still around: %s", err)
+	err = WaitPod(20*time.Second, "pod001", TestNS, "Deleted")
+	t.Assertf(err == nil, "Container still around: %s", err)
 }
 
 // Pod002 will verify that ...
