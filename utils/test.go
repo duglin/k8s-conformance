@@ -2,6 +2,9 @@ package utils
 
 import (
 	"fmt"
+	"runtime"
+	"strconv"
+	"strings"
 )
 
 type Test struct {
@@ -20,20 +23,30 @@ func (t *Test) Log(msg string) {
 	fmt.Print(msg + "\n")
 }
 
-func (t *Test) Logf(f string, args ...string) {
-	fmt.Printf(f+"\n", args)
+func (t *Test) Logf(f string, args ...interface{}) {
+	t.Log(fmt.Sprintf(f, args...))
 }
 
 func (t *Test) Fail(msg string) {
-	t.status = false
-	// t.message = msg
-	panic(msg + "\n")
+	if _, file, line, ok := runtime.Caller(1); ok {
+		if i := strings.LastIndexAny(file, "/\\"); i >= 0 {
+			file = file[i+1:]
+		}
+
+		msg = file + ":" + strconv.Itoa(line) + ": " + msg
+	}
+	t.fail(msg)
 }
 
 func (t *Test) Failf(f string, args ...interface{}) {
-	t.status = false
-	// t.message = fmt.Sprintf(f, args)
-	panic(fmt.Sprintf(f+"\n", args...))
+	if _, file, line, ok := runtime.Caller(1); ok {
+		if i := strings.LastIndexAny(file, "/\\"); i >= 0 {
+			file = file[i+1:]
+		}
+
+		f = file + ":" + strconv.Itoa(line) + ": " + f
+	}
+	t.fail(fmt.Sprintf(f+"\n", args...))
 }
 
 func (t *Test) Status() bool {
@@ -53,13 +66,39 @@ func (t *Test) SetMessage(str string) {
 }
 
 func (t *Test) Assert(b bool, msg string) {
-	if !b {
-		t.Fail(msg)
+	if b {
+		return
 	}
+
+	if _, file, line, ok := runtime.Caller(1); ok {
+		if i := strings.LastIndexAny(file, "/\\"); i >= 0 {
+			file = file[i+1:]
+		}
+
+		msg = file + ":" + strconv.Itoa(line) + ": " + msg
+	}
+
+	t.fail(msg)
 }
 
 func (t *Test) Assertf(b bool, f string, args ...interface{}) {
-	if !b {
-		t.Failf(f, args...)
+	if b {
+		return
 	}
+
+	if _, file, line, ok := runtime.Caller(1); ok {
+		if i := strings.LastIndexAny(file, "/\\"); i >= 0 {
+			file = file[i+1:]
+		}
+
+		f = file + ":" + strconv.Itoa(line) + ": " + f
+	}
+
+	t.fail(fmt.Sprintf(f, args...))
+}
+
+func (t *Test) fail(msg string) {
+	t.status = false
+	// t.message = msg
+	panic(msg + "\n")
 }

@@ -15,7 +15,7 @@ tests.md src/funcs.go : tests/*.go bin/extract
 	@echo -e \\nBuilding the conformance test doc...
 	bin/extract tests/*.go
 
-$(EXE): src/kubecon.go src/funcs.go
+$(EXE): src/kubecon.go src/funcs.go utils/*.go
 	go build -o $@ ${BUILD_OPTS}
 
 cross: .cross

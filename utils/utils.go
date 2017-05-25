@@ -1,53 +1,106 @@
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"os/exec"
+	"strconv"
+	"strings"
+
+	"github.com/ghodss/yaml"
 )
 
-type Test struct {
-	status  bool
-	message string
-}
-
-func NewTest() *Test {
-	t := &Test{
-		status: true,
+func RunCMD(args ...string) (string, int) {
+	// TODO: add timeouts
+	cmd := exec.Command(args[0], args[1:]...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(output), 1
 	}
-	return t
+
+	return string(output), 0
 }
 
-func (t *Test) Log(msg string) {
-	fmt.Print(msg + "\n")
+func Kubectl(args ...string) (string, int) {
+	a := append([]string{"kubectl"}, args...)
+
+	return RunCMD(a...)
 }
 
-func (t *Test) Logf(f string, args ...string) {
-	fmt.Printf(f+"\n", args)
+func CreateFile(fn string, content string) {
+	err := ioutil.WriteFile(fn, []byte(content), 0644)
+	if err != nil {
+		panic(fmt.Sprintf("Error creating file(%s): %s", fn, content))
+	}
 }
 
-func (t *Test) Fail(msg string) {
-	t.status = false
-	// t.message = msg
-	panic(msg + "\n")
+// JsonValue will walk a json object (as a string) for a particular value.
+// path is of form:
+//   prop
+//   prop.prop
+//   prop[int].prop
+func JsonValue(jsonStr string, path string) (string, error) {
+	var obj interface{}
+	err := json.Unmarshal([]byte(jsonStr), &obj)
+	if err != nil {
+		panic(fmt.Sprintf("Error parsing json(%s):\n%s", err, jsonStr))
+	}
+	return ObjValue(obj, path)
 }
 
-func (t *Test) Failf(f string, args ...string) {
-	t.status = false
-	// t.message = fmt.Sprintf(f, args)
-	panic(fmt.Sprintf(f+"\n", args))
+func YamlValue(yamlStr string, path string) (string, error) {
+	var obj interface{}
+	err := yaml.Unmarshal([]byte(yamlStr), &obj)
+	if err != nil {
+		panic(fmt.Sprintf("Error parsing yaml(%s):\n%s", err, yamlStr))
+	}
+	return ObjValue(obj, path)
 }
 
-func (t *Test) Status() bool {
-	return t.status
-}
+func ObjValue(obj interface{}, path string) (string, error) {
+	words := []string{}
+	path = strings.TrimSpace(path)
+	prop := ""
+	for pos := 0; pos-1 != len(path); pos++ {
+		// fmt.Printf("pos: %d\n", pos)
+		if pos != len(path) {
+			ch := path[pos]
+			// fmt.Printf("ch: %v\n", string(ch))
+			if ch != '.' && ch != '[' && ch != ']' {
+				prop = prop + string(ch)
+				continue
+			}
+		}
 
-func (t *Test) SetStatus(s bool) {
-	t.status = s
-}
+		if prop != "" {
+			words = append(words, prop)
+		}
+		if pos != len(path) && path[pos] != ']' {
+			words = append(words, string(path[pos]))
+		}
+		prop = ""
+	}
 
-func (t *Test) Message() string {
-	return t.message
-}
+	var ok bool
+	for pos := 0; ; pos = pos + 1 {
+		if pos == len(words) {
+			str, _ := json.Marshal(obj)
+			return string(str), nil
+		}
+		word := words[pos]
 
-func (t *Test) SetMessage(str string) {
-	t.message = str
+		if word == "." {
+			obj = obj.(map[string]interface{})
+		} else if word == "[" {
+			pos = pos + 1
+			index, _ := strconv.Atoi(words[pos])
+			obj = obj.([]interface{})[index]
+		} else {
+			obj, ok = obj.(map[string]interface{})[word]
+			if !ok {
+				return "", fmt.Errorf("Can't find property: %s", word)
+			}
+		}
+	}
 }
