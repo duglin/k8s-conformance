@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	// "strings"
+	"time"
 
 	. "../utils"
 )
@@ -17,7 +18,8 @@ func Pod001(t *Test) {
         { "apiVersion": "v1",
           "kind": "Pod",
           "metadata" : {
-            "name": "pod001"
+            "name": "pod001",
+			"namespace": "`+TestNS+`"
           },
           "spec": {
             "containers": [{
@@ -31,14 +33,24 @@ func Pod001(t *Test) {
 	out, code := Kubectl("create", "-f", "pod.json")
 	t.Assertf(code == 0, "Creating pod failed(%d): %s", code, out)
 
-	out, code = Kubectl("get", "pods")
+	out, code = Kubectl("get", "pods", "--namespace", TestNS)
 	t.Assertf(code == 0, "Getting pod failed(%d): %s", code, out)
 
-	out, code = Kubectl("get", "pod/pod001", "-o", "yaml")
+	out, code = Kubectl("get", "po/pod001", "-o", "yaml", "--namespace", TestNS)
 	t.Assertf(code == 0, "Getting pod failed(%d): %s", code, out)
+
+	b, err := Wait(20*time.Second, func() (bool, error) {
+		out, code = Kubectl("get", "pod/pod001", "-o", "yaml",
+			"--namespace", TestNS)
+		if code != 0 {
+			return false, fmt.Errorf("Error getting pod: %s", out)
+		}
+		s, err := YamlValue(out, "status.phase")
+		return s == "Running", err
+	})
+	t.Assertf(b, "Timed-out waiting for pod to get ready:\n%s", out)
 
 	n, err := YamlValue(out, "metadata.name")
-	fmt.Printf("name: %s\n", n)
 	t.Assertf(err == nil, "Error parsing yaml: %s\n%s", err, out)
 	t.Assertf(n == "pod001", "Wrong pod name(%q), expected %q", n, "pod001")
 
@@ -46,7 +58,7 @@ func Pod001(t *Test) {
 	t.Assertf(err == nil, "Error parsing yaml: %s\n%s", err, out)
 	t.Assertf(i == "nginx", "Wrong image name(%q), expected %q", i, "nginx")
 
-	out, code = Kubectl("delete", "pod/pod001")
+	out, code = Kubectl("delete", "pod/pod001", "--namespace", TestNS)
 	t.Assertf(code == 0, "Deleting pod failed(%d): %s", code, out)
 }
 

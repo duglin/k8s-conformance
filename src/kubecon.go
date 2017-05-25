@@ -8,18 +8,11 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
+	"../tests"
 	. "../utils"
 )
-
-var verbose = false
-
-func Verbose(f string, args ...interface{}) {
-	if !verbose {
-		return
-	}
-	fmt.Printf(f, args...)
-}
 
 func runTest(name string, fn func(*Test)) bool {
 	t := NewTest()
@@ -92,7 +85,7 @@ func runTest(name string, fn func(*Test)) bool {
 		fmt.Printf("FAIL: %s\n", name)
 	}
 
-	if !t.Status() || verbose {
+	if !t.Status() || Verbose {
 		fi, _ := os.Stat("stdout")
 		indent := ""
 		if fi != nil && fi.Size() != 0 {
@@ -121,37 +114,60 @@ func ErrStop(f string, args ...interface{}) {
 	os.Exit(1)
 }
 
-const testCtxt = "kccontext"
-const testNS = "kcnamespace"
-
 func SetupEnv() {
-	Verbose("Retrieving current context\n")
+	Logf("Retrieving current context")
 	if out, code := Kubectl("config", "current-context"); code != 0 {
 		ErrStop("Can't get current context: %s\n", out)
 	}
 
-	Verbose("Creating new namespace: %s\n", testNS)
-	if out, code := Kubectl("create", "namespace", testNS); code != 0 {
-		ErrStop("Can't create the %q namespace: %s\n", testNS, out)
+	Logf("Creating new namespace: %s", tests.TestNS)
+	if out, code := Kubectl("create", "namespace", tests.TestNS); code != 0 {
+		ErrStop("Can't create the %q namespace: %s\n", tests.TestNS, out)
 	}
 
-	Verbose("Setting context (%q) namespace to %q\n", testCtxt, testNS)
-	if out, code := Kubectl("config", "set-context", testCtxt, "--namespace",
-		testNS); code != 0 {
+	Logf("Set context %q namespace to %q", tests.TestCtxt, tests.TestNS)
+	if out, code := Kubectl("config", "set-context", tests.TestCtxt,
+		"--namespace", tests.TestNS); code != 0 {
 		ErrStop("Can't get namespace: %s\n", out)
 	}
 }
 
-func DeleteEnv() {
-	Verbose("Deleting namespace: %s\n", testNS)
-	Kubectl("delete", "namespace", testNS)
+func CleanEnv() {
+	Logf("Cleaning namespace: %s", tests.TestNS)
+	Kubectl("delete", "deployments", "--all", "--force=true", "--now=true",
+		"--namespace", tests.TestNS)
+	Kubectl("delete", "replicasets", "--all", "--force=true", "--now=true",
+		"--namespace", tests.TestNS)
+	Kubectl("delete", "pods", "--all", "--force=true", "--now=true",
+		"--namespace", tests.TestNS)
 
-	Verbose("Deleting context: %s\n", testCtxt)
-	Kubectl("config", "delete-context", testCtxt)
+	Wait(60*time.Second, func() (bool, error) {
+		_, code := Kubectl("get", "pods", tests.TestNS)
+		return code != 0, fmt.Errorf("NS still there")
+	})
+}
+
+func DeleteEnv() {
+	CleanEnv()
+
+	Logf("Deleting namespace: %s", tests.TestNS)
+	Kubectl("delete", "namespace", "--force=true", tests.TestNS)
+
+	b, err := Wait(60*time.Second, func() (bool, error) {
+		_, code := Kubectl("get", "namespace", tests.TestNS)
+		return code != 0, fmt.Errorf("NS still there")
+	})
+
+	if !b {
+		fmt.Printf("Error deleting namespace %q: %s\n", tests.TestNS, err)
+	}
+
+	Logf("Deleting context: %s", tests.TestCtxt)
+	Kubectl("config", "delete-context", tests.TestCtxt)
 }
 
 func main() {
-	flag.BoolVar(&verbose, "v", false, "Verbose flag")
+	flag.BoolVar(&Verbose, "v", false, "Verbose flag")
 
 	total := 0
 	success := 0
@@ -203,6 +219,8 @@ Specify 'TEST', a regular expression, to run seletive tests.
 			success = success + 1
 		}
 		total = total + 1
+
+		CleanEnv()
 	}
 
 	DeleteEnv()

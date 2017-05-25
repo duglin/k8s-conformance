@@ -5,7 +5,7 @@
 
 ## Pod
 
-### [Pod001](tests/pod.go#L10)
+### [Pod001](tests/pod.go#L11)
 
 Pod001 will verify that simple Pod creation works. The platform MUST
 create the specified Pod and queries to retrieve the Pod's metadata MUST
@@ -14,13 +14,13 @@ MUST eventually end up in the `Running` state, and then be able to be
 deleted. Deleting a Pod MUST remove it from the platform
 
 
-### [Pod002](tests/pod.go#L53)
+### [Pod002](tests/pod.go#L65)
 
 Pod002 will verify that ...
 Conformant implementations MUST ....
 
 
-### [Pod003](tests/pod.go#L58)
+### [Pod003](tests/pod.go#L70)
 
 
 

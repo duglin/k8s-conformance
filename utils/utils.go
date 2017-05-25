@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ghodss/yaml"
 )
@@ -58,15 +59,17 @@ func YamlValue(yamlStr string, path string) (string, error) {
 	return ObjValue(obj, path)
 }
 
+func IsNotFound(err error) bool {
+	return err != nil && strings.HasPrefix(err.Error(), "Can't find property:")
+}
+
 func ObjValue(obj interface{}, path string) (string, error) {
 	words := []string{}
 	path = strings.TrimSpace(path)
 	prop := ""
 	for pos := 0; pos-1 != len(path); pos++ {
-		// fmt.Printf("pos: %d\n", pos)
 		if pos != len(path) {
 			ch := path[pos]
-			// fmt.Printf("ch: %v\n", string(ch))
 			if ch != '.' && ch != '[' && ch != ']' {
 				prop = prop + string(ch)
 				continue
@@ -89,17 +92,39 @@ func ObjValue(obj interface{}, path string) (string, error) {
 			case string, int, float64, bool:
 				return fmt.Sprintf("%v", obj), nil
 			default:
-				res, _ := json.Marshal(obj)
+				res, err := json.Marshal(obj)
+				if err != nil {
+					return "", fmt.Errorf("Error marshalling %q", obj)
+				}
 				return string(res), nil
 			}
 		}
 		word := words[pos]
 
 		if word == "." {
-			obj = obj.(map[string]interface{})
+			obj, ok = obj.(map[string]interface{})
+			if !ok {
+				return "", fmt.Errorf("Can't convert %q to a map", obj)
+			}
 		} else if word == "[" {
 			pos = pos + 1
-			index, _ := strconv.Atoi(words[pos])
+			if pos == len(words) {
+				return "", fmt.Errorf("Missing index")
+			}
+			index, err := strconv.Atoi(words[pos])
+			if err != nil {
+				return "", fmt.Errorf("Can't convert %q to an int: %s",
+					words[pos], err)
+			}
+			obj, ok = obj.([]interface{})
+			if !ok {
+				return "", fmt.Errorf("Can't convert %q to an array", obj)
+			}
+
+			if index < 0 || index >= len(obj.([]interface{})) {
+				return "", fmt.Errorf("Index %q is out of range", index)
+			}
+
 			obj = obj.([]interface{})[index]
 		} else {
 			obj, ok = obj.(map[string]interface{})[word]
@@ -108,4 +133,34 @@ func ObjValue(obj interface{}, path string) (string, error) {
 			}
 		}
 	}
+}
+
+func Wait(timeout time.Duration, fn func() (bool, error)) (bool, error) {
+	endTime := time.Now().Unix() + int64(timeout.Seconds())
+	var err error
+	var b bool
+	for time.Now().Unix() < endTime {
+		b, err = fn()
+		if b == true {
+			return b, err
+		}
+		time.Sleep(1 * time.Second)
+	}
+	return false, err
+}
+
+var Verbose bool
+
+func Log(s string) {
+	if !Verbose {
+		return
+	}
+	fmt.Print("[ " + s + " ]\n")
+}
+
+func Logf(f string, args ...interface{}) {
+	if !Verbose {
+		return
+	}
+	Log(fmt.Sprintf(f, args...))
 }
