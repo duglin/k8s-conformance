@@ -9,18 +9,24 @@ import (
 	"regexp"
 	"strings"
 
-	"../utils"
+	. "../utils"
 )
 
 var verbose = false
 
-func runTest(name string, fn func(*utils.Test)) bool {
-	t := utils.NewTest()
+func Verbose(f string, args ...interface{}) {
+	if !verbose {
+		return
+	}
+	fmt.Printf(f, args...)
+}
+
+func runTest(name string, fn func(*Test)) bool {
+	t := NewTest()
 
 	cwd, err := os.Getwd()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Can't get CWD: %s\n", err)
-		os.Exit(1)
+		ErrStop("Can't get CWD: %s\n", err)
 	}
 	defer func() {
 		os.Chdir(cwd) // Ignore err?
@@ -28,8 +34,7 @@ func runTest(name string, fn func(*utils.Test)) bool {
 
 	dir, err := ioutil.TempDir("", "kubecon")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Can't create temp dir: %s\n", err)
-		os.Exit(1)
+		ErrStop("Can't create temp dir: %s\n", err)
 	}
 	defer func() {
 		os.RemoveAll(dir)
@@ -37,8 +42,7 @@ func runTest(name string, fn func(*utils.Test)) bool {
 
 	err = os.Chdir(dir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Can't cd to temp dir(%q): %s\n", dir, err)
-		os.Exit(1)
+		ErrStop("Can't cd to temp dir(%q): %s\n", dir, err)
 	}
 
 	// Save old stdout/stderr so we can re-attach them when we're done
@@ -47,8 +51,7 @@ func runTest(name string, fn func(*utils.Test)) bool {
 
 	r, w, e := os.Pipe()
 	if e != nil {
-		fmt.Fprintf(os.Stderr, "Can't create a pipe: %s\n", e)
-		os.Exit(1)
+		ErrStop("Can't create a pipe: %s\n", e)
 	}
 
 	outFile, err := os.Create("stdout") // Should be in temp dir, auto-removed
@@ -113,6 +116,40 @@ func runTest(name string, fn func(*utils.Test)) bool {
 	return t.Status()
 }
 
+func ErrStop(f string, args ...interface{}) {
+	fmt.Fprintf(os.Stderr, f, args...)
+	os.Exit(1)
+}
+
+const testCtxt = "kccontext"
+const testNS = "kcnamespace"
+
+func SetupEnv() {
+	Verbose("Retrieving current context\n")
+	if out, code := Kubectl("config", "current-context"); code != 0 {
+		ErrStop("Can't get current context: %s\n", out)
+	}
+
+	Verbose("Creating new namespace: %s\n", testNS)
+	if out, code := Kubectl("create", "namespace", testNS); code != 0 {
+		ErrStop("Can't create the %q namespace: %s\n", testNS, out)
+	}
+
+	Verbose("Setting context (%q) namespace to %q\n", testCtxt, testNS)
+	if out, code := Kubectl("config", "set-context", testCtxt, "--namespace",
+		testNS); code != 0 {
+		ErrStop("Can't get namespace: %s\n", out)
+	}
+}
+
+func DeleteEnv() {
+	Verbose("Deleting namespace: %s\n", testNS)
+	Kubectl("delete", "namespace", testNS)
+
+	Verbose("Deleting context: %s\n", testCtxt)
+	Kubectl("config", "delete-context", testCtxt)
+}
+
 func main() {
 	flag.BoolVar(&verbose, "v", false, "Verbose flag")
 
@@ -138,13 +175,14 @@ Specify 'TEST', a regular expression, to run seletive tests.
 	for _, pattern := range flag.Args() {
 		re, err := regexp.Compile("(?i)" + pattern)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Bad test pattern %q: %s\n", pattern, err)
-			os.Exit(1)
+			ErrStop("Bad test pattern %q: %s\n", pattern, err)
 		}
 		testPatterns = append(testPatterns, re)
 	}
 
 	flag.Args()
+
+	SetupEnv()
 
 	for _, name := range TestNames {
 		if len(testPatterns) != 0 {
@@ -167,9 +205,10 @@ Specify 'TEST', a regular expression, to run seletive tests.
 		total = total + 1
 	}
 
+	DeleteEnv()
+
 	if len(testPatterns) > 0 && total == 0 {
-		fmt.Fprintln(os.Stderr, "Test name patterns didn't find any matches")
-		os.Exit(1)
+		ErrStop("Test name patterns didn't find any matches")
 	}
 
 	fmt.Printf("\nResults: %d/%d tests passed\n", success, total)

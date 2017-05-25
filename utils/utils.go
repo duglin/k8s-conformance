@@ -11,7 +11,7 @@ import (
 	"github.com/ghodss/yaml"
 )
 
-func RunCMD(args ...string) (string, int) {
+func RunCmd(args ...string) (string, int) {
 	// TODO: add timeouts
 	cmd := exec.Command(args[0], args[1:]...)
 	output, err := cmd.CombinedOutput()
@@ -25,7 +25,7 @@ func RunCMD(args ...string) (string, int) {
 func Kubectl(args ...string) (string, int) {
 	a := append([]string{"kubectl"}, args...)
 
-	return RunCMD(a...)
+	return RunCmd(a...)
 }
 
 func CreateFile(fn string, content string) {
