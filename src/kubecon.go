@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -142,8 +143,9 @@ func CleanEnv() {
 		"--namespace", tests.TestNS)
 
 	Wait(60*time.Second, func() (bool, error) {
-		_, code := Kubectl("get", "pods", tests.TestNS)
-		return code != 0, fmt.Errorf("NS still there")
+		out, _ := Kubectl("get", "all", "--namespace", tests.TestNS)
+		return strings.Contains(out, "No resources found"),
+			errors.New("Didn't clean up all the way")
 	})
 }
 
@@ -151,8 +153,6 @@ func DeleteEnv() {
 	CleanEnv()
 
 	Logf("Deleting namespace: %s", tests.TestNS)
-	Kubectl("delete", "namespace", "--force=true", "a"+tests.TestNS)
-
 	b, err := Wait(60*time.Second, func() (bool, error) {
 		_, code := Kubectl("get", "namespace", tests.TestNS)
 		if code != 0 {
