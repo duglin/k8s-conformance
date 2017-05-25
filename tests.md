@@ -1,7 +1,7 @@
 ## Table of Contents
 
-1 - [Pod](#pod)
-2 - [ReplicaSet](#replicaset)
+1. [Pod](#pod)
+2. [ReplicaSet](#replicaset)
 
 ## Pod
 
