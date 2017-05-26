@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ghodss/yaml"
@@ -221,4 +223,102 @@ func Logf(f string, args ...interface{}) {
 		return
 	}
 	Log(fmt.Sprintf(f, args...))
+}
+
+type NamespaceInfo struct {
+	name string
+	used bool
+}
+
+var namespaces []*NamespaceInfo
+
+var NSLock1 sync.Mutex
+var NSLock2 sync.Mutex
+
+func GetNamespace() (string, error) {
+	NSLock1.Lock()
+	for _, ns := range namespaces {
+		if ns.used == false {
+			ns.used = true
+			NSLock1.Unlock()
+			return ns.name, nil
+		}
+	}
+	NSLock1.Unlock()
+
+	NSLock2.Lock()
+	newName := fmt.Sprintf("kcnamespace%d", len(namespaces)+1)
+	NSLock1.Lock()
+	namespaces = append(namespaces, &NamespaceInfo{
+		name: newName,
+		used: true,
+	})
+	NSLock1.Unlock()
+	NSLock2.Unlock()
+
+	Logf("Creating new namespace: %s", newName)
+	if out, code := Kubectl("create", "namespace", newName); code != 0 {
+		return "", fmt.Errorf("Can't create the %q namespace: %s", newName, out)
+	}
+	return newName, nil
+}
+
+func FreeNamespace(name string) {
+	NSLock1.Lock()
+	for _, ns := range namespaces {
+		if ns.name == name {
+			NSLock1.Unlock()
+			Logf("Cleaning namespace: %s", name)
+			Kubectl("delete", "deployments", "--all", "--force=true",
+				"--now=true", "--namespace", name)
+			Kubectl("delete", "replicasets", "--all", "--force=true",
+				"--now=true", "--namespace", name)
+			Kubectl("delete", "pods", "--all", "--force=true", "--now=true",
+				"--namespace", name)
+
+			_, err := Wait(60*time.Second, func() (bool, error) {
+				out, _ := Kubectl("get", "all", "--namespace", name)
+				if strings.Contains(out, "No resources found") {
+					return true, nil
+				}
+				return false,
+					fmt.Errorf("Didn't clean up all the way:\n%s", out)
+			})
+			if err != nil {
+				Logf("Error deleting namespace(%s): %s", name, err)
+				return
+			}
+			ns.used = false
+			return
+		}
+	}
+	NSLock1.Unlock()
+}
+
+func DeleteNamespaces() {
+	names := []string{}
+
+	for _, ns := range namespaces {
+		names = append(names, ns.name)
+	}
+
+	Logf("Deleting namespaces: %v", names)
+	args := append([]string{"delete", "namespace", "--force=true"}, names[:]...)
+	Kubectl(args[:]...)
+
+	for _, ns := range namespaces {
+		b, err := Wait(60*time.Second, func() (bool, error) {
+			_, code := Kubectl("get", "namespace", ns.name)
+			if code != 0 {
+				return true, nil
+			}
+			out, code := Kubectl("delete", "namespace", "--force=true", ns.name)
+			return false, fmt.Errorf("it just won't go away!\n%s", out)
+		})
+
+		if !b {
+			fmt.Fprintf(os.Stderr, "Error deleting namespace %q: %s\n",
+				ns.name, err)
+		}
+	}
 }

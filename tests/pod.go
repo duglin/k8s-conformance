@@ -14,12 +14,12 @@ import (
 // MUST eventually end up in the `Running` state, and then be able to be
 // deleted. Deleting a Pod MUST remove it from the platform
 func Pod001(t *Test) {
-	CreateFile("pod.json", `
+	CreateFile("pod.yaml", `
         { "apiVersion": "v1",
           "kind": "Pod",
           "metadata" : {
             "name": "pod001",
-			"namespace": "`+TestNS+`"
+			"namespace": "`+t.NS+`"
           },
           "spec": {
             "containers": [{
@@ -30,16 +30,19 @@ func Pod001(t *Test) {
           }
         }`)
 
-	out, code := Kubectl("create", "-f", "pod.json")
+	out, code := Kubectl("create", "-f", "pod.yaml")
 	t.Assertf(code == 0, "Creating pod failed(%d): %s", code, out)
 
-	out, code = Kubectl("get", "pods", "--namespace", TestNS)
+	out, code = Kubectl("get", "pods", "--namespace", t.NS)
 	t.Assertf(code == 0, "Getting pod failed(%d): %s", code, out)
 
-	out, code = KubectlSh("get pod/pod001 -o yaml --namespace " + TestNS)
+	Log(out)
+	t.Log(out)
+
+	out, code = KubectlSh("get pod/pod001 -o yaml --namespace " + t.NS)
 	t.Assertf(code == 0, "Getting pod failed(%d): %s", code, out)
 
-	err := WaitPod(20*time.Second, "pod001", TestNS, "Running")
+	err := WaitPod(20*time.Second, "pod001", t.NS, "Running")
 	t.Assert(err == nil, err)
 
 	n := YamlValue(out, "metadata.name")
@@ -48,10 +51,10 @@ func Pod001(t *Test) {
 	i := YamlValue(out, "spec.containers[0].image")
 	t.Assertf(i == "nginx", "Wrong image name(%q), expected %q", i, "nginx")
 
-	out, code = KubectlSh("delete pod/pod001 --namespace " + TestNS)
+	out, code = KubectlSh("delete pod/pod001 --namespace " + t.NS)
 	t.Assertf(code == 0, "Deleting pod failed(%d): %s", code, out)
 
-	err = WaitPod(20*time.Second, "pod001", TestNS, "Deleted")
+	err = WaitPod(20*time.Second, "pod001", t.NS, "Deleted")
 	t.Assertf(err == nil, "Container still around: %s", err)
 }
 

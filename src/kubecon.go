@@ -1,178 +1,46 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"os"
 	"regexp"
-	"strings"
+	"sync"
 	"time"
 
-	"../tests"
 	. "../utils"
 )
-
-func runTest(name string, fn func(*Test)) bool {
-	t := NewTest()
-
-	cwd, err := os.Getwd()
-	if err != nil {
-		ErrStop("Can't get CWD: %s", err)
-	}
-	defer func() {
-		os.Chdir(cwd) // Ignore err?
-	}()
-
-	dir, err := ioutil.TempDir("", "kubecon")
-	if err != nil {
-		ErrStop("Can't create temp dir: %s", err)
-	}
-	defer func() {
-		os.RemoveAll(dir)
-	}()
-
-	err = os.Chdir(dir)
-	if err != nil {
-		ErrStop("Can't cd to temp dir(%q): %s", dir, err)
-	}
-
-	// Save old stdout/stderr so we can re-attach them when we're done
-	oldStdout := os.Stdout
-	oldStderr := os.Stderr
-
-	r, w, e := os.Pipe()
-	if e != nil {
-		ErrStop("Can't create a pipe: %s", e)
-	}
-
-	outFile, err := os.Create("stdout") // Should be in temp dir, auto-removed
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Can't output output file(%q): %s\n",
-			"stdout", err)
-	}
-
-	// fmt.Printf("Running %q in %q\n", name, dir)
-
-	os.Stdout = w
-	os.Stderr = w
-
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				fmt.Fprintf(os.Stderr, "Failure:\n%s\n", r)
-				t.SetMessage(fmt.Sprintf("%s", r))
-				t.SetStatus(false)
-			}
-			w.Close()
-		}()
-		fn(t)
-	}()
-
-	io.Copy(outFile, r)
-
-	os.Stdout = oldStdout
-	os.Stderr = oldStderr
-
-	w.Close()
-	r.Close()
-	outFile.Close()
-
-	if t.Status() {
-		fmt.Printf("PASS: %s\n", name)
-	} else {
-		fmt.Printf("FAIL: %s\n", name)
-	}
-
-	if !t.Status() || Verbose {
-		fi, _ := os.Stat("stdout")
-		indent := ""
-		if fi != nil && fi.Size() != 0 {
-			bytes, _ := ioutil.ReadFile("stdout")
-			lines := strings.Split(strings.TrimSpace(string(bytes)), "\n")
-			first := "|"
-			chop := 80 - len(indent) - 2
-			for _, l := range lines {
-				for len(l) > chop {
-					fmt.Printf("%s%s %s", indent, first, l[0:chop])
-					l = l[chop:]
-					first = "|"
-				}
-				fmt.Printf("%s%s %s\n", indent, first, l)
-				first = "|"
-			}
-			fmt.Printf("%s+-------------------\n", indent)
-		}
-	}
-
-	return t.Status()
-}
 
 func ErrStop(f string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, f+"\n", args...)
 	os.Exit(1)
 }
 
-func SetupEnv() {
-	Logf("Retrieving current context")
-	if out, code := Kubectl("config", "current-context"); code != 0 {
-		ErrStop("Can't get current context: %s", out)
-	}
+var running = 0
+var runningMutex = sync.Mutex{}
 
-	Logf("Creating new namespace: %s", tests.TestNS)
-	if out, code := Kubectl("create", "namespace", tests.TestNS); code != 0 {
-		ErrStop("Can't create the %q namespace: %s", tests.TestNS, out)
-	}
-
-	Logf("Set context %q namespace to %q", tests.TestCtxt, tests.TestNS)
-	if out, code := Kubectl("config", "set-context", tests.TestCtxt,
-		"--namespace", tests.TestNS); code != 0 {
-		ErrStop("Can't get namespace: %s", out)
-	}
+func AddRunning() {
+	runningMutex.Lock()
+	running = running + 1
+	runningMutex.Unlock()
 }
 
-func CleanEnv() {
-	Logf("Cleaning namespace: %s", tests.TestNS)
-	Kubectl("delete", "deployments", "--all", "--force=true", "--now=true",
-		"--namespace", tests.TestNS)
-	Kubectl("delete", "replicasets", "--all", "--force=true", "--now=true",
-		"--namespace", tests.TestNS)
-	Kubectl("delete", "pods", "--all", "--force=true", "--now=true",
-		"--namespace", tests.TestNS)
-
-	Wait(60*time.Second, func() (bool, error) {
-		out, _ := Kubectl("get", "all", "--namespace", tests.TestNS)
-		return strings.Contains(out, "No resources found"),
-			errors.New("Didn't clean up all the way")
-	})
-}
-
-func DeleteEnv() {
-	CleanEnv()
-
-	Logf("Deleting namespace: %s", tests.TestNS)
-	b, err := Wait(60*time.Second, func() (bool, error) {
-		_, code := Kubectl("get", "namespace", tests.TestNS)
-		if code != 0 {
-			return true, nil
-		}
-		out, code := Kubectl("delete", "namespace", "--force=true",
-			tests.TestNS)
-		return false, fmt.Errorf("it just won't go away!\n%s", out)
-	})
-
-	if !b {
-		fmt.Printf("Error deleting namespace %q: %s\n", tests.TestNS, err)
-	}
-
-	Logf("Deleting context: %s", tests.TestCtxt)
-	Kubectl("config", "delete-context", tests.TestCtxt)
+func DoneRunning() {
+	runningMutex.Lock()
+	running = running - 1
+	runningMutex.Unlock()
 }
 
 func main() {
+	parallel := 1
+	fnNS := ""
+	fnDir := ""
+
+	fnName := flag.String("fn", "", "")
+	flag.StringVar(&fnNS, "fnNS", "", "")
+	flag.StringVar(&fnDir, "fnDir", "", "")
 	flag.BoolVar(&Verbose, "v", false, "Verbose flag")
+	flag.IntVar(&parallel, "p", 1, "Number of parallel tests to run")
 
 	total := 0
 	success := 0
@@ -192,6 +60,28 @@ Specify 'TEST', a regular expression, to run seletive tests.
 	}
 	flag.Parse()
 
+	if parallel < 0 {
+		parallel = 1
+	}
+
+	if fnName != nil && *fnName != "" {
+		fn, ok := TestMap[*fnName]
+		if !ok {
+			fmt.Fprintf(os.Stderr, "Missing func for name %q\n", *fnName)
+			os.Exit(1)
+		}
+		t := Test{
+			Name: *fnName,
+			Fn:   fn,
+			Dir:  fnDir,
+			NS:   fnNS,
+		}
+		if t.Run() {
+			os.Exit(0)
+		}
+		os.Exit(1)
+	}
+
 	testPatterns := []*regexp.Regexp{}
 	for _, pattern := range flag.Args() {
 		re, err := regexp.Compile("(?i)" + pattern)
@@ -202,8 +92,6 @@ Specify 'TEST', a regular expression, to run seletive tests.
 	}
 
 	flag.Args()
-
-	first := true
 
 	for _, name := range TestNames {
 		if len(testPatterns) != 0 {
@@ -224,24 +112,30 @@ Specify 'TEST', a regular expression, to run seletive tests.
 			continue
 		}
 
-		// Don't setup our env until we know for sure we have a test to run
-		if first {
-			SetupEnv()
+		t := Test{
+			Name: name,
+			Fn:   fn,
 		}
 
-		if runTest(name, fn) {
-			success = success + 1
+		for running >= parallel {
+			time.Sleep(time.Second)
 		}
+
+		AddRunning()
+		go func() {
+			if t.Run() {
+				success = success + 1
+			}
+			DoneRunning()
+		}()
+
 		total = total + 1
-
-		CleanEnv()
-		first = false
+	}
+	for running > 0 {
+		time.Sleep(time.Second)
 	}
 
-	// Only delete env if we actually set it up
-	if !first {
-		DeleteEnv()
-	}
+	DeleteNamespaces()
 
 	if len(testPatterns) > 0 && total == 0 {
 		ErrStop("Test name patterns didn't find any matches")
