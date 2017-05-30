@@ -65,14 +65,14 @@ Specify 'TEST', a regular expression, to run seletive tests.
 	}
 
 	if fnName != nil && *fnName != "" {
-		fn, ok := TestMap[*fnName]
+		td, ok := TestMap[*fnName]
 		if !ok {
 			fmt.Fprintf(os.Stderr, "Missing func for name %q\n", *fnName)
 			os.Exit(1)
 		}
 		t := Test{
 			Name: *fnName,
-			Fn:   fn,
+			Fn:   td.Fn,
 			Dir:  fnDir,
 			NS:   fnNS,
 		}
@@ -106,7 +106,7 @@ Specify 'TEST', a regular expression, to run seletive tests.
 			}
 		}
 
-		fn, ok := TestMap[name]
+		td, ok := TestMap[name]
 		if !ok {
 			fmt.Fprintf(os.Stderr, "Missing func for name %q\n", name)
 			continue
@@ -114,10 +114,11 @@ Specify 'TEST', a regular expression, to run seletive tests.
 
 		t := Test{
 			Name: name,
-			Fn:   fn,
+			Fn:   td.Fn,
 		}
 
-		for running >= parallel {
+		for (td.Serialize && running > 0) ||
+			(!td.Serialize && running >= parallel) {
 			time.Sleep(time.Second)
 		}
 
@@ -128,6 +129,10 @@ Specify 'TEST', a regular expression, to run seletive tests.
 			}
 			DoneRunning()
 		}()
+
+		for td.Serialize && running != 0 {
+			time.Sleep(time.Second)
+		}
 
 		total = total + 1
 	}

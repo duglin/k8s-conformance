@@ -7,13 +7,15 @@ BUILD_OPTS=-tags netgo -installsuffix netgo src/kubecon.go src/funcs.go
 
 all: $(EXE) verify
 
-bin/extract: src/extract.go
+bin/extract: src/extract.go utils/test.go
 	@echo -e \\nBuilding extract tool...
 	go build -o $@ src/extract.go
 
 tests.md src/funcs.go : tests/*.go bin/extract
 	@echo -e \\nBuilding the conformance test doc...
-	bin/extract tests/*.go
+	@#Tests are run in the order in which the list are listed on the
+	@#next comment and in the order specified within the golang file
+	bin/extract tests/rs.go tests/pod.go
 
 $(EXE): src/kubecon.go src/funcs.go utils/*.go
 	go build -o $@ ${BUILD_OPTS}

@@ -23,6 +23,7 @@ type Test struct {
 	Line        int
 	Name        string
 	Description string
+	Serialize   bool
 }
 
 type Tests []Test
@@ -67,13 +68,16 @@ func AddTests(suite *Suite, fileName string) *Suite {
 				}
 
 				if fn.Doc.Text != nil {
-					add.Description = fn.Doc.Text()
-					/*
-						lines := strings.Split(fn.Doc.Text(), "\n")
-						for _, line := range lines {
-							add.Description += line
+					text := strings.TrimSpace(fn.Doc.Text())
+					// add.Description = text
+					lines := strings.Split(text, "\n")
+					for _, line := range lines {
+						if strings.HasPrefix(line, "+serialize") {
+							add.Serialize = true
+							line = "\nTest is run in 'serialize' mode."
 						}
-					*/
+						add.Description += line + "\n"
+					}
 				}
 				suite.Tests = append(suite.Tests, add)
 			}
@@ -94,7 +98,7 @@ func main() {
 		AddTests(&suite, fn)
 	}
 
-	sort.Sort(suite.Tests)
+	// sort.Sort(suite.Tests)
 
 	srcFile, err := os.Create(*srcFn)
 	if err != nil {
@@ -110,31 +114,36 @@ func main() {
 	}
 	defer docFile.Close()
 
-	docFile.WriteString("## Table of Contents\n\n")
+	/*
+		docFile.WriteString("## Table of Contents\n\n")
 
-	for i, t := range suite.TOC {
-		docFile.WriteString(fmt.Sprintf("%d. [%s](#%s)\n", 1+i, t, strings.ToLower(t)))
-	}
+		for i, t := range suite.TOC {
+			docFile.WriteString(fmt.Sprintf("%d. [%s](#%s)\n", 1+i, t, strings.ToLower(t)))
+		}
+	*/
 
 	docFile.WriteString("\n")
 
 	srcFile.WriteString("package main\n\n")
 	srcFile.WriteString("import \"../utils\"\n")
 	srcFile.WriteString("import \"../tests\"\n\n")
-	srcFile.WriteString("var TestMap = map[string]func(*utils.Test){\n")
+	srcFile.WriteString("var TestMap = map[string]utils.TestDefinition{\n")
 
-	prevTOC := -1
+	// prevTOC := -1
 
 	for _, r := range suite.Tests {
-		if prevTOC == -1 || !strings.HasPrefix(r.Name, suite.TOC[prevTOC]) {
-			prevTOC = prevTOC + 1
-			docFile.WriteString(fmt.Sprintf("## %s\n\n", suite.TOC[prevTOC]))
-		}
+		/*
+			if prevTOC == -1 || !strings.HasPrefix(r.Name, suite.TOC[prevTOC]) {
+				prevTOC = prevTOC + 1
+				docFile.WriteString(fmt.Sprintf("## %s\n\n", suite.TOC[prevTOC]))
+			}
+		*/
 
-		fmt.Fprintf(docFile, "### [%s](%s#L%d)\n\n%s\n\n", r.Name, r.FileName,
+		fmt.Fprintf(docFile, "### [%s](%s#L%d)\n\n%s\n", r.Name, r.FileName,
 			r.Line, r.Description)
 
-		str := fmt.Sprintf("\t\"%s\": tests.%s,\n", r.Name, r.Name)
+		str := fmt.Sprintf("\t\"%s\": {tests.%s,%v},\n",
+			r.Name, r.Name, r.Serialize)
 		srcFile.WriteString(str)
 	}
 

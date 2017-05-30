@@ -13,6 +13,11 @@ import (
 	// "time"
 )
 
+type TestDefinition struct {
+	Fn        func(*Test)
+	Serialize bool
+}
+
 type Test struct {
 	Name string
 	Fn   func(*Test)
