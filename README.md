@@ -44,6 +44,11 @@ $ kubecon
 The output will be a list of each test that is executed along with the
 result - `PASS` or `FAIL`.
 
+By default `kubecon` will run all tests in serialize mode. If you want
+to run them in parallel then specify the `-p` flag with the number of
+tests that should be run at the same time - e.g. `-p 5`.
+
+
 TODO: Show Sample Output
 
 ### Structure of the Tests
@@ -80,6 +85,21 @@ func Pod001(t *Test) {
 
 The comment blocks for each test are extracted and put into a single
 [tests.md](tests.md) for easy viewing.
+
+If a test needs to be run in serial mode then add the following comment to
+the end of the comment block for the test:
+```
+// +serialize
+```
+`kubecon` will then make sure that when this test is run no other tests
+will be executing at the same time - regardless of whether the `-p` flag
+was used or not.
+
+The tests are executed in the order in which they are seen during the
+running of the `extract` build tool. So make sure that the list of test
+filenames specified on the `extract` command line and the order of the
+tests within those files matches the desired order of tests execution.
+See the `Makefile` for more information.
 
 ## Contributing
 
